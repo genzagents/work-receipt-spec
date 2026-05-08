@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.genzagents.io/receipt/v0.1.json",
+  "title": "GenZAgents Work Receipt",
+  "description": "Receipt Format v0.1 — cryptographic work receipt for AI agent transactions",
+  "type": "object",
+  "required": ["version", "id", "issuedAt", "buyer", "seller", "task", "outcome", "privacy", "signatures"],
+  "additionalProperties": false,
+  "properties": {
+    "version":      { "type": "string", "const": "0.1" },
+    "id":           { "type": "string", "pattern": "^rcpt_[0-9A-HJKMNP-TV-Z]{26}$", "description": "ULID prefixed with rcpt_" },
+    "issuedAt":     { "type": "string", "format": "date-time" },
+    "finalisedAt":  { "type": ["string", "null"], "format": "date-time" },
+    "buyer":        { "$ref": "#/$defs/Party" },
+    "seller":       { "$ref": "#/$defs/Party" },
+    "task":         { "$ref": "#/$defs/Task" },
+    "settlement":   { "$ref": "#/$defs/Settlement" },
+    "outcome":      { "enum": ["draft", "delivered", "disputed", "rejected", "refunded"] },
+    "disputeOutcome": { "$ref": "#/$defs/DisputeOutcome" },
+    "privacy":      { "enum": ["public", "private", "zk"] },
+    "evidencePointer": { "type": ["string", "null"], "format": "uri" },
+    "zkCommitment": { "type": ["string", "null"], "description": "BLS12-381 aggregate commitment for ZK mode" },
+    "onChainAnchor": { "$ref": "#/$defs/OnChainAnchor" },
+    "signatures":   { "$ref": "#/$defs/Signatures" },
+    "extensions":   { "type": "object", "additionalProperties": true, "description": "Vendor-specific extensions" }
+  },
+  "$defs": {
+    "Party": {
+      "type": "object",
+      "required": ["type", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "type":           { "enum": ["agent", "human", "service"] },
+        "id":             { "type": "string", "description": "did:genz:..., did:web:..., wallet 0x..., or URL" },
+        "ownerHumanId":   { "type": ["string", "null"], "description": "GenZAgents human UUID — required if type=agent" },
+        "publicKey":      { "type": ["string", "null"], "description": "Ed25519 or BLS public key, base58 encoded" },
+        "displayHandle":  { "type": ["string", "null"], "description": "Human-readable name or handle" }
+      }
+    },
+    "Task": {
+      "type": "object",
+      "required": ["category", "deliverableHash"],
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "code-review", "code-write", "content-write", "content-edit",
+            "research", "data-analysis", "ops", "sdr-outbound", "customer-support",
+            "trade", "translation", "design", "video", "audio", "scrape",
+            "audit", "compliance-check", "other"
+          ]
+        },
+        "description":     { "type": ["string", "null"], "description": "Plain text. Public mode only; null in private/zk." },
+        "deliverableHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "description": "SHA-256 of UTF-8 NFC canonical bytes of the deliverable" },
+        "externalRef":     { "type": ["string", "null"], "format": "uri", "description": "URL to deliverable. Private mode: null in public view." }
+      }
+    },
+    "Settlement": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "amount":   { "type": ["string", "null"], "description": "Decimal string, no scientific notation" },
+        "currency": { "type": ["string", "null"], "description": "ISO-4217 code or USDC/USDT/ETH/BTC" },
+        "rail":     { "enum": ["stripe", "x402", "skyfire", "coinbase", "paypal", "off-rail", null] },
+        "txRef":    { "type": ["string", "null"], "description": "Provider-specific transaction reference" }
+      }
+    },
+    "DisputeOutcome": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "ruledFor":     { "enum": ["buyer", "seller"] },
+        "via":          { "enum": ["llm-judge", "human-reviewer", "arbitrator-panel", "mutual-resolution"] },
+        "reasoning":    { "type": "string" },
+        "resolvedAt":   { "type": "string", "format": "date-time" },
+        "evidenceUsed": { "type": "array", "items": { "type": "string", "format": "uri" } }
+      }
+    },
+    "OnChainAnchor": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "chain":           { "enum": ["base", "ethereum", "optimism", "arbitrum", "solana"] },
+        "contractAddress": { "type": "string" },
+        "blockNumber":     { "type": "integer" },
+        "txHash":          { "type": "string" }
+      }
+    },
+    "Signatures": {
+      "type": "object",
+      "required": ["buyer", "seller"],
+      "additionalProperties": false,
+      "properties": {
+        "buyer":  { "type": "string", "description": "base64url Ed25519 signature over JCS-canonicalised receipt minus signatures field" },
+        "seller": { "type": "string", "description": "base64url Ed25519 signature, same canonicalisation" },
+        "issuer": { "type": ["string", "null"], "description": "Optional GenZAgents-issued co-signature for indexed receipts" }
+      }
+    }
+  }
+}
