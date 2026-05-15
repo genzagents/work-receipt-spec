@@ -21,8 +21,9 @@
     "evidencePointer": { "type": ["string", "null"], "format": "uri" },
     "zkCommitment": { "type": ["string", "null"], "description": "BLS12-381 aggregate commitment for ZK mode" },
     "onChainAnchor": { "$ref": "#/$defs/OnChainAnchor" },
+    "project":      { "$ref": "#/$defs/Project" },
     "signatures":   { "$ref": "#/$defs/Signatures" },
-    "extensions":   { "type": "object", "additionalProperties": true, "description": "Vendor-specific extensions" }
+    "extensions":   { "type": "object", "additionalProperties": true, "description": "Vendor-specific extensions (also mirrors `project` under `extensions.project` for back-compat with v0.5.0–v0.5.5)" }
   },
   "$defs": {
     "Party": {
@@ -95,6 +96,18 @@
         "buyer":  { "type": "string", "description": "base64url Ed25519 signature over JCS-canonicalised receipt minus signatures field" },
         "seller": { "type": "string", "description": "base64url Ed25519 signature, same canonicalisation" },
         "issuer": { "type": ["string", "null"], "description": "Optional GenZAgents-issued co-signature for indexed receipts" }
+      }
+    },
+    "Project": {
+      "type": ["object", "null"],
+      "required": ["name"],
+      "additionalProperties": false,
+      "description": "Project / chat / session this receipt belongs to. Promoted to a first-class typed sub-object in v0.5.6. Drives the 'Restore this chat' cross-LLM portability flow: receipts sharing the same `name` group under one chat thread, and a project-scoped portable manifest filters by this. Receipts continue to carry the same data under `extensions.project` for v0.5.0–v0.5.5 reader back-compat.",
+      "properties": {
+        "name":      { "type": "string", "minLength": 1, "maxLength": 200, "description": "Human-readable label that groups receipts. Keep stable across captures within the same chat." },
+        "sessionId": { "type": ["string", "null"], "maxLength": 128, "description": "Upstream LLM's thread/session identifier — Claude chat_id, ChatGPT conversation_id, MCP-client session UUID, etc." },
+        "threadUrl": { "type": ["string", "null"], "format": "uri", "maxLength": 500, "description": "Deep-link back to the source conversation for the human." },
+        "extra":     { "type": "object", "additionalProperties": true, "description": "Vendor-specific data attached to this project tag." }
       }
     }
   }

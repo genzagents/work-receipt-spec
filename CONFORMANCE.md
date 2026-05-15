@@ -71,6 +71,57 @@ When `runtime` is present, fields are all optional but MUST NOT contain prompt o
 
 `version` is required on every receipt. Verifiers MUST reject receipts with unknown `version` values rather than guessing.
 
+## §H — Project sub-object (added v0.5.6)
+
+When `project` is present at the top level, it MUST conform to the Project sub-schema (see SPEC §3.8). Required field: `name` (non-empty, max 200 chars). Optional fields: `sessionId` (max 128 chars), `threadUrl` (URI, max 500 chars), `extra` (free-form object).
+
+Producers SHOULD also mirror the same value under `extensions.project` for back-compat with v0.5.0–v0.5.5 readers. When both the top-level field and the extensions mirror are present, they MUST be deeply equal; verifiers MAY reject mismatches as malformed.
+
+Readers MUST read the top-level `project` field as authoritative. Readers MAY fall back to `extensions.project` if the top-level field is absent.
+
+Receipts that share `project.name` are considered to belong to the same chat / project / sprint. UI implementations SHOULD group them visibly; portable-manifest generators MAY filter by this field to scope a cross-LLM handoff to a single chat thread.
+
+Verifiers MUST treat differences in `project.name` capitalisation or whitespace as distinct values (no normalisation). Producers SHOULD trim leading/trailing whitespace before signing.
+
+### §H.1 Test vector
+
+A draft receipt with `project` populated:
+
+```json
+{
+  "version": "0.1",
+  "id": "rcpt_01H1234567890ABCDEFGHJKMNP",
+  "issuedAt": "2026-05-15T13:00:00Z",
+  "buyer": { "type": "human", "id": "did:web:example.com" },
+  "seller": { "type": "agent", "id": "did:genz:abc..." },
+  "task": {
+    "category": "code-write",
+    "deliverableHash": "sha256:0123...cdef",
+    "description": "Implemented Stripe webhook retry with jitter."
+  },
+  "privacy": "private",
+  "outcome": "draft",
+  "project": {
+    "name": "Stripe migration",
+    "sessionId": "claude-conv-abc-123",
+    "threadUrl": "https://claude.ai/chat/abc-123"
+  },
+  "extensions": {
+    "project": {
+      "name": "Stripe migration",
+      "sessionId": "claude-conv-abc-123",
+      "threadUrl": "https://claude.ai/chat/abc-123"
+    }
+  },
+  "signatures": {
+    "buyer":  "<base64url Ed25519 signature>",
+    "seller": ""
+  }
+}
+```
+
+The canonicalised form (used for signing) includes the typed `project` object — the signature does NOT change shape from v0.5.5 except that this new field is part of the signed bytes.
+
 ---
 
 Conformance reports welcomed at the [genzagents/work-receipt-spec issues](https://github.com/genzagents/work-receipt-spec/issues).

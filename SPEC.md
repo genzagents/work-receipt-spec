@@ -69,6 +69,7 @@ $id: https://spec.genzagents.io/receipt/v0.1.json
     "evidencePointer": { "type": ["string","null"], "format": "uri" },
     "zkCommitment": { "type": ["string","null"] },
     "onChainAnchor": { "$ref": "#/$defs/OnChainAnchor" },
+    "project":    { "$ref": "#/$defs/Project" },
     "signatures": { "$ref": "#/$defs/Signatures" },
     "extensions": { "type": "object", "additionalProperties": true }
   }
@@ -174,6 +175,27 @@ Notes:
   }
 }
 ```
+
+### 3.8 The `Project` sub-object (added v0.5.6)
+
+```json
+"Project": {
+  "type": ["object","null"],
+  "required": ["name"],
+  "properties": {
+    "name":      { "type": "string", "minLength": 1, "maxLength": 200, "description": "Human-readable label that groups receipts under one chat / project / sprint. Keep stable across captures within the same conversation." },
+    "sessionId": { "type": ["string","null"], "maxLength": 128, "description": "Upstream LLM's thread/session identifier — Claude chat_id, ChatGPT conversation_id, MCP client per-process UUID, etc." },
+    "threadUrl": { "type": ["string","null"], "format": "uri", "maxLength": 500, "description": "Deep-link back to the source conversation for the human." },
+    "extra":     { "type": "object", "additionalProperties": true, "description": "Vendor-specific data attached to this project tag." }
+  }
+}
+```
+
+**Why this matters.** Receipts that share a `project.name` belong to the same chat / project / sprint. Implementations SHOULD use it to (a) group receipts in UI lists, (b) filter the receipt set when generating a cross-LLM bootstrap manifest, and (c) bucket per-conversation work when an MCP server fires receipts automatically.
+
+**Back-compatibility.** Implementations targeting v0.5.0–v0.5.5 readers SHOULD additionally mirror the same data under `extensions.project` (jsonb). Readers MUST treat the typed top-level `project` field as authoritative when both are present and they disagree.
+
+**Stability rule.** `project.name` SHOULD remain identical across all captures within a single chat. Don't auto-rename a chat once it's begun; old receipts under the previous name become orphaned from the user's perspective.
 
 ## 4. Privacy Modes
 
@@ -321,6 +343,15 @@ Reserved extension namespaces:
 - `extensions.crypto.*` — crypto-native fields (token references, on-chain pointers beyond `onChainAnchor`)
 - `extensions.compliance.*` — compliance-specific evidence packs (SOC 2, ISO 42001 mappings)
 - `extensions.x402.*`, `extensions.stripe.*`, `extensions.skyfire.*` — payment-rail-specific metadata
+- `extensions.project` — **Deprecated** (still emitted for back-compat). The Project sub-object is now §3.8 first-class. v0.5.6+ readers MUST prefer the top-level `project` field.
+
+### 8.2.1 Field promotion in v0.5.6 — `Project`
+
+The `project` sub-object was previously an ad-hoc convention under `extensions.project`. v0.5.6 promotes it to a first-class typed field (see §3.8). Compatibility rules:
+
+1. **Producers (v0.5.6+)** MUST emit `project` at the top level when set, and SHOULD additionally mirror the same value under `extensions.project` for v0.5.0–v0.5.5 readers.
+2. **Readers (v0.5.6+)** MUST read the top-level `project` field. They MAY fall back to `extensions.project` when the typed field is absent — useful for receipts emitted by older producers.
+3. **Signature canonicalisation** does NOT change. The receipt body is still serialised with JCS; the new field is included in the canonical form. Verifiers running v0.5.5 or earlier will see the new field as an unknown property and either ignore it (lenient) or reject the receipt (strict). Strict v0.5.5 verifiers MUST be upgraded to v0.5.6 or set their accept policy to "lenient unknown fields".
 
 ### 8.3 Migration to v1.0
 
