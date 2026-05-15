@@ -71,6 +71,48 @@ When `runtime` is present, fields are all optional but MUST NOT contain prompt o
 
 `version` is required on every receipt. Verifiers MUST reject receipts with unknown `version` values rather than guessing.
 
+## §I — Self-issued signatures (added v0.5.7)
+
+When `signatures.buyer == "self-issued"` AND `signatures.seller == "self-issued"`:
+
+1. Verifiers MUST validate `signatures.issuer` against the platform issuer's Ed25519 public key.
+2. Verifiers MUST NOT attempt to derive keys from buyer.id / seller.id or check per-party signatures.
+3. The platform issuer public key is retrievable at:
+   - `GET https://api.genzagents.com/v1/issuer/ed25519` (canonical, JSON)
+   - `GET https://genzagents.com/.well-known/did.json` (W3C DID mirror, key id `#issuer-key-1`)
+4. Mixed signatures (sentinel + real sig) MUST cause verification to fail with code `MALFORMED_SELF_ISSUED`.
+
+### §I.1 Test vector
+
+```json
+{
+  "version": "0.1",
+  "id": "rcpt_01J3KEYAIAAAAAAAAAAAAAAAA",
+  "issuedAt": "2026-05-15T18:00:00Z",
+  "finalisedAt": "2026-05-15T18:00:00Z",
+  "buyer":  { "type": "human", "id": "did:web:genzagents.com", "ownerHumanId": "<uuid>" },
+  "seller": { "type": "agent", "id": "did:genz:abc...", "ownerHumanId": "<same uuid>" },
+  "task": {
+    "category": "ops",
+    "deliverableHash": "sha256:0123...cdef",
+    "description": "MCP tool call: get_my_trust_score"
+  },
+  "privacy": "private",
+  "outcome": "delivered",
+  "project": { "name": "claude-desktop", "sessionId": "mcp-01H..." },
+  "signatures": {
+    "buyer":  "self-issued",
+    "seller": "self-issued",
+    "issuer": "<base64url Ed25519 sig>"
+  }
+}
+```
+
+Verifier validates by:
+1. Computing JCS canonical bytes of the receipt with `signatures` removed.
+2. Looking up the issuer public key from `/v1/issuer/ed25519` or the well-known DID doc.
+3. Running `Ed25519.verify(canonicalBytes, base64url_decode(signatures.issuer), issuerPubkey)`.
+
 ## §H — Project sub-object (added v0.5.6)
 
 When `project` is present at the top level, it MUST conform to the Project sub-schema (see SPEC §3.8). Required field: `name` (non-empty, max 200 chars). Optional fields: `sessionId` (max 128 chars), `threadUrl` (URI, max 500 chars), `extra` (free-form object).

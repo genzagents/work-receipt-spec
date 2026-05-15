@@ -176,6 +176,37 @@ Notes:
 }
 ```
 
+### 3.7.1 Self-issued signatures (added v0.5.6 → v0.5.7)
+
+For receipts where the buyer and seller resolve to the SAME human (e.g. an indie developer's MCP auto-capture, or a browser-side session receipt for personal use), the spec admits a "self-issued" signing mode that elides the per-party Ed25519 signatures in favour of a single platform-issuer cosignature.
+
+The `signatures` object on a self-issued receipt MUST be:
+
+```json
+{
+  "buyer":  "self-issued",
+  "seller": "self-issued",
+  "issuer": "<base64url Ed25519 signature by the platform issuer key over the JCS-canonicalised receipt body sans signatures>"
+}
+```
+
+Where:
+
+- The literal string `"self-issued"` (lowercase, no whitespace) signals that the buyer/seller did not produce per-party signatures.
+- `issuer` is a real Ed25519 signature by the platform's published issuer key (see §11.2 below for retrieval). The signing payload is identical to the regular two-party flow: JCS canonical bytes of the receipt body with the `signatures` field omitted.
+
+**Verifier rule.** When `signatures.buyer == "self-issued"` AND `signatures.seller == "self-issued"`, verifiers MUST:
+
+1. Validate `signatures.issuer` against the platform issuer's published public key.
+2. NOT attempt to derive Ed25519 keys from `buyer.id` / `seller.id` or check those signatures.
+3. Treat the receipt as authoritative if and only if the issuer signature is valid.
+
+Receipts that mix the sentinel with a real per-party signature (e.g. `buyer: "self-issued"` but `seller: <hex sig>`) MUST be rejected as malformed.
+
+**Trust model.** Self-issued receipts trade a cryptographic "both parties signed" assertion for a platform-issuer assertion "the platform validated that the API key used to issue this receipt belongs to the human who owns the seller agent." The platform's issuer public key is pinned via §11.2 below and rotation is governed by §8.3.
+
+**When NOT to use self-issued mode.** Commercial transactions where buyer and seller are different humans MUST use the regular two-party signatures. Self-issued is a convenience for personal-use captures, not a replacement for the dual-signature trust model.
+
 ### 3.8 The `Project` sub-object (added v0.5.6)
 
 ```json
