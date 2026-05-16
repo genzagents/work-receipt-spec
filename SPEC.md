@@ -207,14 +207,15 @@ Receipts that mix the sentinel with a real per-party signature (e.g. `buyer: "se
 
 **When NOT to use self-issued mode.** Commercial transactions where buyer and seller are different humans MUST use the regular two-party signatures. Self-issued is a convenience for personal-use captures, not a replacement for the dual-signature trust model.
 
-### 3.8 The `Project` sub-object (added v0.5.6)
+### 3.8 The `Project` sub-object (added v0.5.6, extended v0.5.9)
 
 ```json
 "Project": {
   "type": ["object","null"],
   "required": ["name"],
   "properties": {
-    "name":      { "type": "string", "minLength": 1, "maxLength": 200, "description": "Human-readable label that groups receipts under one chat / project / sprint. Keep stable across captures within the same conversation." },
+    "name":      { "type": "string", "minLength": 1, "maxLength": 200, "description": "Human-readable label that groups receipts under one chat / project / sprint. Keep stable across captures within the same conversation, INCLUDING across providers (a 'Stripe migration' project might span Claude + ChatGPT — same `name`, different `provider` per receipt)." },
+    "provider":  { "type": ["string","null"], "maxLength": 64, "description": "v0.5.9. The LLM platform / MCP host that produced this receipt — `claude-desktop`, `claude-code`, `chatgpt`, `cursor`, `cline`, `windsurf`, `continue`, etc. Auto-populated by the MCP server from the `clientInfo.name` field in the MCP `initialize` handshake. Drives the dashboard's cross-provider hierarchy (Agent → Provider → Project → Chat)." },
     "sessionId": { "type": ["string","null"], "maxLength": 128, "description": "Upstream LLM's thread/session identifier — Claude chat_id, ChatGPT conversation_id, MCP client per-process UUID, etc." },
     "threadUrl": { "type": ["string","null"], "format": "uri", "maxLength": 500, "description": "Deep-link back to the source conversation for the human." },
     "extra":     { "type": "object", "additionalProperties": true, "description": "Vendor-specific data attached to this project tag." }
@@ -223,6 +224,8 @@ Receipts that mix the sentinel with a real per-party signature (e.g. `buyer: "se
 ```
 
 **Why this matters.** Receipts that share a `project.name` belong to the same chat / project / sprint. Implementations SHOULD use it to (a) group receipts in UI lists, (b) filter the receipt set when generating a cross-LLM bootstrap manifest, and (c) bucket per-conversation work when an MCP server fires receipts automatically.
+
+**Cross-provider continuity (v0.5.9).** When the same `project.name` appears under multiple `provider` values, those receipts belong to the same conceptual chat — split across multiple LLM platforms. A bootstrap manifest scoped to that project name SHOULD aggregate all receipts regardless of provider; implementations MAY additionally accept a `provider` filter to scope to one platform's slice. The MCP server tools `list_my_chats` and `restore_chat` (v0.5.9 reference impl) operate on this dimension: the hierarchy is `Agent → Provider → Project → Receipts`, so a user working in Claude can pull a chat they previously had in ChatGPT under the same agent without copy-pasting transcripts.
 
 **Back-compatibility.** Implementations targeting v0.5.0–v0.5.5 readers SHOULD additionally mirror the same data under `extensions.project` (jsonb). Readers MUST treat the typed top-level `project` field as authoritative when both are present and they disagree.
 

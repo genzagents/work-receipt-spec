@@ -113,9 +113,13 @@ Verifier validates by:
 2. Looking up the issuer public key from `/v1/issuer/ed25519` or the well-known DID doc.
 3. Running `Ed25519.verify(canonicalBytes, base64url_decode(signatures.issuer), issuerPubkey)`.
 
-## §H — Project sub-object (added v0.5.6)
+## §H — Project sub-object (added v0.5.6, extended v0.5.9 with `provider`)
 
-When `project` is present at the top level, it MUST conform to the Project sub-schema (see SPEC §3.8). Required field: `name` (non-empty, max 200 chars). Optional fields: `sessionId` (max 128 chars), `threadUrl` (URI, max 500 chars), `extra` (free-form object).
+When `project` is present at the top level, it MUST conform to the Project sub-schema (see SPEC §3.8). Required field: `name` (non-empty, max 200 chars). Optional fields: `provider` (max 64 chars, v0.5.9+), `sessionId` (max 128 chars), `threadUrl` (URI, max 500 chars), `extra` (free-form object).
+
+**§H.2 Cross-provider grouping rule.** Two receipts with the same `project.name` and DIFFERENT `project.provider` values MUST be treated as the same conceptual chat split across LLM platforms. UI implementations SHOULD render them under one project bucket with a provider sub-indicator per receipt. Portable-manifest generators MAY accept a `provider` filter to scope to one platform's slice while keeping the project-level grouping intact for unfiltered queries.
+
+**§H.3 Provider naming guidance.** The `provider` value SHOULD be the lowercase platform identifier (e.g. `claude-desktop`, `claude-code`, `chatgpt`, `cursor`, `cline`, `windsurf`, `continue`). Implementations using the GenZAgents MCP server get this auto-populated from the MCP `initialize` handshake's `clientInfo.name` field. Receipts issued via the SDK directly without going through MCP MAY omit the field.
 
 Producers SHOULD also mirror the same value under `extensions.project` for back-compat with v0.5.0–v0.5.5 readers. When both the top-level field and the extensions mirror are present, they MUST be deeply equal; verifiers MAY reject mismatches as malformed.
 
