@@ -168,6 +168,90 @@ A draft receipt with `project` populated:
 
 The canonicalised form (used for signing) includes the typed `project` object — the signature does NOT change shape from v0.5.5 except that this new field is part of the signed bytes.
 
+## §J — Environment + issuedByHumanId (added v0.6)
+
+Two new optional fields on the receipt root.
+
+**Producer SHOULD**:
+- Set `environment` to one of `production` | `staging` | `dev`. When absent, readers treat it as `production` (back-compat with v0.5 receipts that don't have the field).
+- Set `issuedByHumanId` to the UUID of the human (resolved from the API key) who actually triggered the issuance. Distinct from `buyer.ownerHumanId` because:
+  - Self-issued receipts (§I) park a sentinel `buyer.id` (e.g. `did:web:genzagents.com`); the actual issuer goes in `issuedByHumanId`.
+  - Draft receipts can have a buyer that is a different human from the API-key holder (operator-issued on behalf of buyer).
+  - Multi-human-owned (org) agents need accurate per-receipt attribution.
+
+**Verifier SHOULD**:
+- Exclude receipts where `environment !== "production"` from aggregate trust score calculations. Test traffic must not pollute production signals.
+- Surface `issuedByHumanId` in any UI that previously showed `buyer.ownerHumanId` for attribution.
+- Tolerate the absence of both fields — receipts emitted by v0.5 producers omit them.
+
+**Signature canonicalisation**: both fields are included in the JCS-canonicalised body. v0.5 verifiers will see them as unknown properties and either accept (lenient mode) or reject (strict mode). Strict v0.5 verifiers MUST upgrade to v0.6 OR set `acceptUnknownFields: true`.
+
+**Test vector**:
+
+```json
+{
+  "version": "0.1",
+  "id": "rcpt_01HZJ9XYZABC0000000000000000",
+  "issuedAt": "2026-05-25T14:00:00.000Z",
+  "environment": "production",
+  "issuedByHumanId": "8f4e2a1c-3b5d-4f7e-9a8b-1c2d3e4f5a6b",
+  "buyer":  { "type": "human", "id": "did:web:genzagents.com" },
+  "seller": { "type": "agent", "id": "did:genz:6Nd2ksQl5swEcY32rWHA2Dbb0OJO7-VrSXHg0fmpNN4" },
+  "task":   { "category": "code-write", "deliverableHash": "sha256:abc..." },
+  "privacy": "private",
+  "outcome": "delivered",
+  "signatures": {
+    "buyer": "self-issued",
+    "seller": "self-issued",
+    "issuer": "<base64url Ed25519 signature>"
+  }
+}
+```
+
+For `environment: "staging"` receipts, verifiers MUST exclude from trust aggregation; the receipt is still cryptographically valid, just scoped to non-production.
+
+## §K — Anomaly event taxonomy (added v0.6)
+
+Anomalies are detector-emitted webhook events, NOT part of the signed receipt body. Implementations MAY surface them as out-of-band notifications.
+
+**Canonical anomaly `kind` values** (SHOULD be honoured by any implementation that ships anomaly webhooks):
+
+| `kind` | Trigger condition |
+|---|---|
+| `failure_rate` | >40% of an agent's tool calls in a 15-minute window failed (outcome ∈ `disputed`, `cancelled`) |
+| `dispute_burst` | ≥3 disputes filed against an agent within 24h |
+| `cost_spike` | Runtime cost in last 24h > 3× the prior 7-day daily average |
+| `trust_score_drop` | Trust score fell >20% within a 7-day window |
+| `cap_warning` | Agent receipt count ≥80% of `receiptCap` |
+
+**Implementations MUST**:
+- Key the anomaly ledger by `(agent_id, kind)` so duplicate alerts don't fire while the existing one is unresolved.
+- Include a `detail` jsonb on each detection carrying the thresholds + the receipts that triggered it.
+- Provide a way for admins to mark an alert resolved.
+
+**Implementations SHOULD**:
+- Honour `environment` (§J) when computing windowed aggregates — staging traffic excluded.
+- Auto-resolve when the underlying condition clears (v0.7+ requirement).
+- Map each `kind` to a webhook event named `anomaly.<kind>` (e.g. `anomaly.failure_rate`).
+
+The reference implementation runs detection on a 5-minute cadence (configurable via `GENZAGENTS_ANOMALY_INTERVAL_MS`) and fires to all webhooks subscribed to the matching `anomaly.<kind>` event.
+
+## §L — Session replay (added v0.6, optional)
+
+Producers MAY capture full MCP tool-call payloads (args + result) and pair them with the issuing receipt. Replay storage is NOT part of the cryptographic anchor — verifiers do not need to fetch replays to validate signatures.
+
+**Format**:
+- Producer optionally adds `extensions.replay.url` pointing at a tool-call payload bundle.
+- Payloads SHOULD be capped at 10KB per direction (args, result), with `args_truncated` / `result_truncated` boolean flags so the receiver knows the body is a prefix.
+- Replays SHOULD be access-controlled identically to the receipt itself (owner / buyer / org-admin).
+- Replays SHOULD be audit-logged on every fetch (access_type=`export`).
+
+**Reference implementation** exposes:
+- `POST /v1/receipts/:id/replay` — record (gated by `GENZAGENTS_REPLAY=on` on the MCP server)
+- `GET /v1/receipts/:id/replay` — fetch (auth = same as the underlying receipt)
+
+Implementations are free to use a different storage shape — only the JCS-canonicalised receipt body is part of the cryptographic anchor.
+
 ---
 
 Conformance reports welcomed at the [genzagents/work-receipt-spec issues](https://github.com/genzagents/work-receipt-spec/issues).

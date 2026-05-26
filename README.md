@@ -30,38 +30,48 @@ settlement events from any of them.
 
 ## Status
 
-- **Version:** 0.1 (Draft)
+- **Version:** 0.1 wire-format · v0.6 spec revision (May 2026)
 - **Issued:** 4 May 2026
-- **Last revision:** 8 May 2026 (added §3.7 Pacts — pre-hoc behavioural commitments)
+- **Last revision:** 26 May 2026 — v0.6 spec adds `environment`, `issuedByHumanId`, replay link, and the anomaly event taxonomy (all backward-compatible with v0.5 receivers)
 - **License (spec text):** [CC BY-SA 4.0](./LICENSE-SPEC)
 - **License (reference SDKs):** [Apache-2.0](./LICENSE-CODE)
-- **Donation target:** Linux Foundation Agentic AI Foundation, working-group
-  submission pending Q3 2026 (after v1.0 lands with three+ independent
-  implementations in the wild).
+- **Donation target:** Linux Foundation Agentic AI Foundation, working-group submission ready (see [`LF-EMAIL-DRAFT.md`](./LF-EMAIL-DRAFT.md))
 
-This is a **draft**. Expect breaking changes inside v0. Wire format will be
-frozen at v1.0.
+This is a **draft**. Expect additive changes inside v0. Wire format will be
+frozen at v1.0; all v0.5+ additions are receiver-tolerant for the v1.0
+freeze.
 
-### What's new in v0.1 (May 2026 revisions)
+### What's new in v0.6 (May 2026)
 
-- **§3.4 Runtime fields** (model / tokens / duration / cost) — captures what
-  the agent actually used, in micropound precision, without ever capturing
-  prompt or output content. Zero-content by construction.
-- **§3.7 Pacts** — pre-hoc behavioural commitments the seller signs as part
-  of the draft. Pacts are citable as breach evidence in disputes and may
-  carry explicit slash amounts. Inspired by procurement contract patterns.
-- **§3.8 Lifecycle extensions** — `agent_transferred`, `previous_dids[]` to
-  support agent ownership rotation while preserving receipt continuity.
+- **§8.2.2 `environment` field** — `production` / `staging` / `dev`. Lets producers separate test traffic from real work. Verifiers SHOULD exclude non-production receipts from aggregate trust calculations.
+- **§8.2.2 `issuedByHumanId` field** — UUID of the human (resolved from API key) who triggered issuance. Distinct from `buyer.ownerHumanId` — needed for self-issued receipts and multi-human org agents where attribution accuracy matters.
+- **§8.2.2 `extensions.replay.url`** — optional URL pointing at a tool-call payload bundle (args + result, capped 10KB per direction). Debug-surface convenience, NOT part of the cryptographic anchor.
+- **§8.2.3 Anomaly event taxonomy** — five canonical anomaly kinds (`failure_rate`, `dispute_burst`, `cost_spike`, `trust_score_drop`, `cap_warning`) for out-of-band webhook delivery.
+- See [`CONFORMANCE.md` §J / §K / §L](./CONFORMANCE.md) for test vectors.
+
+### What was new in v0.5 (May 2026)
+
+- **§3.4 Runtime fields** (model / tokens / duration / cost) — captures what the agent actually used, in micropound precision, without ever capturing prompt or output content. Zero-content by construction.
+- **§3.7 Pacts** — pre-hoc behavioural commitments the seller signs as part of the draft. Pacts are citable as breach evidence in disputes and may carry explicit slash amounts.
+- **§3.8 `project` sub-object** — promoted to first-class field in v0.5.6; extended in v0.5.9 with a `provider` slot for cross-LLM continuity (Claude / ChatGPT / Cursor).
+- **§3.8.1 Self-issued signatures (v0.5.7)** — server-cosigned receipts where `signatures.buyer` and `signatures.seller` carry the sentinel `"self-issued"` and the cryptographic anchor is the issuer's Ed25519 signature.
 
 ## Reference implementations
 
-- **TypeScript** — [`@genzagentsio/receipts`](https://www.npmjs.com/package/@genzagentsio/receipts) (npm)
-- **Python** — [`genzagents`](https://pypi.org/project/genzagents/) (PyPI)
-- **MCP server** — [`@genzagents/mcp-server`](https://www.npmjs.com/package/@genzagents/mcp-server) (npm)
+All bumped to **0.6.0** in lockstep (26 May 2026):
 
-The reference SDKs implement the full v0.1 spec including BLS12-381 aggregate
-ZK proofs and Ed25519 signing over RFC 8785 (JCS) canonicalised receipt
-bodies.
+- **TypeScript** — [`@genzagentsio/receipts@0.6.0`](https://www.npmjs.com/package/@genzagentsio/receipts) (npm)
+- **Python** — [`genzagents@0.6.0`](https://pypi.org/project/genzagents/) (PyPI)
+- **MCP server** — [`@genzagentsio/mcp-server@0.6.8`](https://www.npmjs.com/package/@genzagentsio/mcp-server) — includes `check_duplicates` tool, session replay (`GENZAGENTS_REPLAY=on`), auto-receipt modes
+- **LangChain wrapper** — [`@genzagentsio/langchain@0.6.0`](https://www.npmjs.com/package/@genzagentsio/langchain)
+- **CrewAI wrapper** — [`@genzagentsio/crewai@0.6.0`](https://www.npmjs.com/package/@genzagentsio/crewai)
+- **AutoGen wrapper** — [`@genzagentsio/autogen@0.6.0`](https://www.npmjs.com/package/@genzagentsio/autogen)
+
+The reference SDKs implement the full v0.1 wire format including BLS12-381
+aggregate ZK proofs and Ed25519 signing over RFC 8785 (JCS) canonicalised
+receipt bodies, plus all v0.6 additive fields.
+
+**Live production deployment:** [genzagents.com](https://genzagents.com) — 22 db tables, 30+ routes, 17 MCP tools, signed compliance evidence packs for SOC 2 / ISO 42001 / EU AI Act / EU CRA, semantic hybrid search, 5-category anomaly watcher, audit log with SOC 2 CC6.1 conformance, SSO + domain-verified auto-membership.
 
 ## Quick start (TypeScript)
 
@@ -153,8 +163,13 @@ assert result.valid
 | §11 | Examples | Public, private, ZK receipts |
 | §12 | Security | Threats and mitigations |
 | §13 | Implementation guidance | Minimum viable + reference impls |
-| §3.7 | **Pacts** (NEW) | Pre-hoc behavioural commitments + slash mechanics |
+| §3.7 | **Pacts** | Pre-hoc behavioural commitments + slash mechanics |
 | §3.4 | **Runtime fields** | Model / tokens / duration / cost (zero-content) |
+| §3.8 | **Project** | First-class chat / session context tag (v0.5.6) |
+| §3.8.1 | **Self-issued sigs** | Server-cosigned receipts (v0.5.7) |
+| §8.2.2 | **Environment** (NEW v0.6) | Production / staging / dev separation |
+| §8.2.2 | **issuedByHumanId** (NEW v0.6) | Per-receipt human attribution |
+| §8.2.3 | **Anomaly events** (NEW v0.6) | 5-kind webhook taxonomy |
 
 The full spec text is in [`SPEC.md`](./SPEC.md).
 
