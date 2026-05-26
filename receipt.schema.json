@@ -23,7 +23,9 @@
     "onChainAnchor": { "$ref": "#/$defs/OnChainAnchor" },
     "project":      { "$ref": "#/$defs/Project" },
     "signatures":   { "$ref": "#/$defs/Signatures" },
-    "extensions":   { "type": "object", "additionalProperties": true, "description": "Vendor-specific extensions (also mirrors `project` under `extensions.project` for back-compat with v0.5.0–v0.5.5)" }
+    "environment":  { "enum": ["production", "staging", "dev"], "default": "production", "description": "v0.6 — separates test traffic from production. Verifiers SHOULD exclude non-production receipts from aggregate trust calculations." },
+    "issuedByHumanId": { "type": ["string", "null"], "description": "v0.6 — UUID of the human who triggered issuance (resolved from API key). Distinct from buyer.ownerHumanId; used for accurate attribution in multi-human-owned agents." },
+    "extensions":   { "type": "object", "additionalProperties": true, "description": "Vendor-specific extensions (also mirrors `project` under `extensions.project` for back-compat with v0.5.0–v0.5.5). v0.6 may include `extensions.replay.url` pointing at a tool-call payload bundle." }
   },
   "$defs": {
     "Party": {

@@ -387,6 +387,36 @@ The `project` sub-object was previously an ad-hoc convention under `extensions.p
 2. **Readers (v0.5.6+)** MUST read the top-level `project` field. They MAY fall back to `extensions.project` when the typed field is absent — useful for receipts emitted by older producers.
 3. **Signature canonicalisation** does NOT change. The receipt body is still serialised with JCS; the new field is included in the canonical form. Verifiers running v0.5.5 or earlier will see the new field as an unknown property and either ignore it (lenient) or reject the receipt (strict). Strict v0.5.5 verifiers MUST be upgraded to v0.5.6 or set their accept policy to "lenient unknown fields".
 
+### 8.2.2 Field additions in v0.6 — `environment`, `issuedByHumanId`, replay link
+
+The v0.6 release adds three new optional fields on the receipt root, all backward-compatible (older readers see them as unknown properties):
+
+1. **`environment`** — `"production" | "staging" | "dev"`. Default `"production"` when absent. Lets producers separate test traffic from real work. Verifiers MAY filter receipts by `environment="production"` when computing trust scores or running anomaly detection so test traffic doesn't pollute production signals. **Recommendation**: receipts where `environment !== "production"` SHOULD be excluded from any aggregate trust calculation surface unless the verifier is explicitly inspecting test data.
+
+2. **`issuedByHumanId`** — UUID of the human (resolved from the API key) who triggered issuance. Distinct from `buyer.ownerHumanId` because:
+   - Self-issued receipts set both `signatures.buyer` and `signatures.seller` to the sentinel `"self-issued"` and put the platform's stable buyer DID (e.g. `did:web:genzagents.com`) under `buyer.id`. The issuing human is recorded here.
+   - Draft receipts can have a buyer that is a different human from the API-key holder (e.g. an operator issues on behalf of a buyer). `issuedByHumanId` tracks who pressed the button.
+   - Multi-human-owned agents (org membership) attribute correctly via this field rather than the abstract org owner.
+   - Receipts emitted by v0.5.x producers omit the field; readers MUST tolerate the absence.
+
+3. **`extensions.replay.url` (recommendation, optional)** — when the producer captures full MCP tool-call payloads (args + result), it MAY publish a URL where authorised verifiers can fetch the payload bundle. The reference implementation exposes `POST /v1/receipts/:id/replay` and `GET /v1/receipts/:id/replay`; the bundle is gated by ACL identical to the receipt itself. Payloads SHOULD be capped at 10KB per direction (args / result) with `args_truncated` / `result_truncated` flags. This is debug-surface convenience, not part of the cryptographic anchor — verifiers do NOT need to fetch replays to validate signatures.
+
+These three additions ship as v0.5.x receiver-compatible (all are tolerated as unknown properties). v0.6+ receivers SHOULD honour `environment` when computing aggregates and MAY expose `issuedByHumanId` in any attribution surface that previously showed `buyer.ownerHumanId`.
+
+### 8.2.3 Anomaly event taxonomy (v0.6)
+
+Producers MAY surface anomaly detections as out-of-band webhook events. The reference implementation defines five canonical anomaly kinds:
+
+| `kind` | Trigger |
+|---|---|
+| `failure_rate` | >40% of an agent's tool calls in a 15-minute window failed (outcome ∈ `disputed`, `cancelled`) |
+| `dispute_burst` | ≥3 disputes filed against an agent within 24h |
+| `cost_spike` | Runtime cost in last 24h > 3× the prior 7-day daily average |
+| `trust_score_drop` | Trust score fell >20% within a 7-day window |
+| `cap_warning` | Agent receipt count ≥80% of its `receiptCap` |
+
+Anomalies are detector-emitted, not part of the signed receipt body. Implementations SHOULD record each detection in a ledger keyed on `(agent_id, kind)` and refuse to fire a duplicate alert while the existing one is unresolved. Resolution is currently manual; v0.7 may add automatic resolution heuristics. Anomaly payloads SHOULD include the receipts that triggered the threshold so downstream consumers can investigate.
+
 ### 8.3 Migration to v1.0
 
 v1.0 is anticipated to add:
