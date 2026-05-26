@@ -18,11 +18,17 @@ I'd like to propose the **Work Receipt Format v0.1** as a candidate working-grou
 **Why now.** Anthropic's April 2026 Project Deal report explicitly stated *"the policy and legal frameworks around AI models that transact on our behalf simply don't exist yet."* EU AI Act enforcement begins 2 August 2026; EU CRA reporting 11 September 2026. Regulated buyers — banks, insurers, healthcare, government — need a vendor-evidence answer for AI agents on a binding deadline.
 
 **Reference implementations already shipped.**
-- `@genzagentsio/receipts` (npm, MIT/Apache-2.0, ~22k bytes)
-- `genzagents` (PyPI, MIT/Apache-2.0)
-- `@genzagentsio/mcp-server` (npm, MCP server distribution)
-- `@genzagentsio/langchain`, `@genzagentsio/crewai`, `@genzagentsio/autogen` (framework wrappers)
-- v0.4 production deployment at https://genzagents.com (live since May 2026; 17 db tables, 19 routes, 17 MCP tools, real BLS12-381 aggregation, Persona Real KYC, three-tier dispute resolution with multi-LLM Jury)
+- `@genzagentsio/receipts@0.6.0` (npm, Apache-2.0) — TS SDK with full v0.6 types (`environment`, `issuedByHumanId`)
+- `genzagents@0.6.0` (PyPI, Apache-2.0) — Python SDK in lockstep
+- `@genzagentsio/mcp-server@0.6.8` (npm) — MCP server with auto-receipt mode, session replay (`GENZAGENTS_REPLAY=on`), `check_duplicates` MCP tool for pre-issue duplicate detection
+- `@genzagentsio/langchain@0.6.0`, `@genzagentsio/crewai@0.6.0`, `@genzagentsio/autogen@0.6.0` (framework wrappers, all bumped in lockstep)
+- v0.6.9 production deployment at https://genzagents.com (live + auto-deployed via CI/CD; 22 db tables, 30+ routes, 17 MCP tools, real BLS12-381 ZK aggregation, Persona Real KYC, three-tier dispute resolution with multi-LLM jury, signed compliance evidence packs for SOC 2 / ISO 42001 / EU AI Act / EU CRA, semantic + lexical hybrid search via pgvector, 5-category anomaly watcher with webhook delivery, audit log with SOC 2 CC6.1 conformance, Microsoft Entra + Google Workspace SSO with domain-verified auto-membership)
+
+**Spec v0.6 additions** (all backward-compatible with v0.5 receivers):
+- `environment` field on receipt root: `production | staging | dev`. Verifiers SHOULD exclude non-production from aggregate trust scoring.
+- `issuedByHumanId` field: per-receipt human attribution. Distinct from `buyer.ownerHumanId` because self-issued receipts use a sentinel buyer DID.
+- `extensions.replay.url`: optional URL pointing at a tool-call payload bundle, capped 10KB per direction, with truncation flags. Debug-surface convenience, NOT part of the cryptographic anchor.
+- Canonical anomaly event taxonomy (5 kinds, §8.2.3) for out-of-band webhook delivery.
 
 **Independent implementers and design partners committed.**
 - SIGIL Protocol (sigilprotocol.xyz, 185+ agents, Solana mainnet) — uses our identity primitive shape
